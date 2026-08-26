@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import type { WsMessage, RoomStatePayload, CursorUpdatePayload } from '../types/websocket';
-import type { SupportedLanguage } from '../types/compiler';
+import type { SupportedLanguage, ExecuteResponse } from '../types/compiler';
 
 const WS_BASE_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000';
 
@@ -10,12 +10,20 @@ interface UseWebSocketProps {
   onCodeUpdate: (code: string) => void;
   onLanguageUpdate: (language: SupportedLanguage) => void;
   onCursorUpdate: (clientId: string, cursor: CursorUpdatePayload) => void;
+  onRunStarted: () => void;
+  onRunResult: (result: ExecuteResponse) => void;
 }
 
-export const useWebSocket = ({ roomId, username, onCodeUpdate, onLanguageUpdate, onCursorUpdate }: UseWebSocketProps) => {
+export const useWebSocket = ({ 
+  roomId, 
+  username, 
+  onCodeUpdate, 
+  onLanguageUpdate, 
+  onCursorUpdate,
+  onRunStarted,
+  onRunResult
+}: UseWebSocketProps) => {
   const ws = useRef<WebSocket | null>(null);
-  
-  // Track server-authoritative room state locally in the hook
   const [roomState, setRoomState] = useState<RoomStatePayload | null>(null);
 
   useEffect(() => {
@@ -39,9 +47,13 @@ export const useWebSocket = ({ roomId, username, onCodeUpdate, onLanguageUpdate,
             if (message.payload?.language) onLanguageUpdate(message.payload.language);
             break;
           case 'CURSOR_UPDATE':
-            if (message.client_id && message.payload) {
-              onCursorUpdate(message.client_id, message.payload);
-            }
+            if (message.client_id && message.payload) onCursorUpdate(message.client_id, message.payload);
+            break;
+          case 'RUN_STARTED':
+            onRunStarted();
+            break;
+          case 'RUN_RESULT':
+            if (message.payload) onRunResult(message.payload);
             break;
         }
       } catch (error) {
@@ -50,11 +62,9 @@ export const useWebSocket = ({ roomId, username, onCodeUpdate, onLanguageUpdate,
     };
 
     return () => {
-      if (ws.current) {
-        ws.current.close();
-      }
+      if (ws.current) ws.current.close();
     };
-  }, [roomId, username, onCodeUpdate, onLanguageUpdate, onCursorUpdate]);
+  }, [roomId, username, onCodeUpdate, onLanguageUpdate, onCursorUpdate, onRunStarted, onRunResult]);
 
   const sendCodeUpdate = useCallback((code: string) => {
     if (ws.current?.readyState === WebSocket.OPEN) {
@@ -80,11 +90,18 @@ export const useWebSocket = ({ roomId, username, onCodeUpdate, onLanguageUpdate,
     }
   }, []);
 
+  const sendRunCode = useCallback((language: SupportedLanguage, code: string) => {
+    if (ws.current?.readyState === WebSocket.OPEN) {
+      ws.current.send(JSON.stringify({ type: 'RUN_CODE', payload: { language, code } }));
+    }
+  }, []);
+
   return {
     roomState,
     sendCodeUpdate,
     sendLanguageUpdate,
     sendCursorUpdate,
-    requestControl
+    requestControl,
+    sendRunCode
   };
 };

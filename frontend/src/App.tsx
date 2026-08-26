@@ -4,7 +4,6 @@ import type { OnMount } from '@monaco-editor/react';
 import { Header } from './components/Header';
 import { OutputConsole } from './components/OutputConsole';
 import { RoomEntry } from './components/RoomEntry';
-import { runCodeApi } from './services/api';
 import { SUPPORTED_LANGUAGES } from './types/compiler';
 import { useRoomStore } from './store/roomStore';
 import { useWebSocket } from './hooks/useWebSocket';
@@ -19,12 +18,9 @@ function App() {
   const [output, setOutput] = useState<ExecuteResponse | null>(null);
   const [isRunning, setIsRunning] = useState(false);
 
-  // References to interact directly with Monaco's API for cursors
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<any>(null);
   const cursorDecorationsRef = useRef<any>([]);
-  
-  // We use a ref to track roomState without triggering hook re-renders
   const roomStateRef = useRef<RoomStatePayload | null>(null);
 
   const handleRemoteCodeUpdate = useCallback((newCode: string) => {
@@ -41,7 +37,6 @@ function App() {
     const isLeader = clientId === roomStateRef.current.owner;
     const className = isLeader ? 'remote-cursor-leader' : 'remote-cursor-member';
 
-    // Clear old cursor, set new one
     cursorDecorationsRef.current = editorRef.current.deltaDecorations(
       cursorDecorationsRef.current,
       [
@@ -51,42 +46,53 @@ function App() {
         }
       ]
     );
-  }, []); // Dependencies stay clean to prevent WebSocket reconnects
+  }, []);
 
-  const { roomState, sendCodeUpdate, sendLanguageUpdate, sendCursorUpdate, requestControl } = useWebSocket({
+  const handleRunStarted = useCallback(() => {
+    setIsRunning(true);
+    setOutput(null); // Clear previous output
+  }, []);
+
+  const handleRunResult = useCallback((result: ExecuteResponse) => {
+    setOutput(result);
+    setIsRunning(false);
+  }, []);
+
+  const { 
+    roomState, 
+    sendCodeUpdate, 
+    sendLanguageUpdate, 
+    sendCursorUpdate, 
+    requestControl,
+    sendRunCode
+  } = useWebSocket({
     roomId,
     username,
     onCodeUpdate: handleRemoteCodeUpdate,
     onLanguageUpdate: handleRemoteLanguageUpdate,
-    onCursorUpdate: handleRemoteCursorUpdate
+    onCursorUpdate: handleRemoteCursorUpdate,
+    onRunStarted: handleRunStarted,
+    onRunResult: handleRunResult
   });
 
-  // Keep the ref synced with the latest roomState from the hook
   useEffect(() => {
     roomStateRef.current = roomState;
   }, [roomState]);
 
-  // Determine Editor State based on Business Logic
   const isWaiting = roomState?.status === 'WAITING';
   const hasControl = roomState?.controller === username;
-  const isLeader = roomState?.owner === username;
   const readOnly = isWaiting || !hasControl;
 
   const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
 
-    // Send cursor position when user clicks or uses arrows
     editor.onDidChangeCursorPosition((e: any) => {
       sendCursorUpdate(e.position.lineNumber, e.position.column);
     });
 
-    // Intercept Keystrokes. If readOnly, try to take control!
     editor.onKeyDown(() => {
-      // If we are waiting for a player, do nothing.
       if (roomStateRef.current?.status === 'WAITING') return;
-      
-      // If we don't have control, request it (Server will grant based on Leader/Member rules)
       if (!hasControl) {
         requestControl();
       }
@@ -98,7 +104,6 @@ function App() {
     setLanguage(newLanguage);
     sendLanguageUpdate(newLanguage);
     
-    // Update snippet for new language
     const langOption = SUPPORTED_LANGUAGES.find(l => l.id === newLanguage);
     if (langOption) {
       setCode(langOption.defaultCode);
@@ -113,17 +118,10 @@ function App() {
     sendCodeUpdate(newCode);
   };
 
-  const handleRunCode = async () => {
+  const handleRunCode = () => {
     if (readOnly) return;
-    setIsRunning(true);
-    try {
-      const result = await runCodeApi(language, code);
-      setOutput(result);
-    } catch (error: any) {
-      setOutput({ stdout: '', stderr: error.message || 'Error', status: 'error' });
-    } finally {
-      setIsRunning(false);
-    }
+    // We no longer call the REST API here. We send a WS command instead!
+    sendRunCode(language, code);
   };
 
   const currentLangOption = SUPPORTED_LANGUAGES.find(l => l.id === language);
@@ -139,7 +137,6 @@ function App() {
         selectedLanguage={language}
       />
       
-      {/* Status Bar */}
       <div className="h-8 bg-slate-800 border-b border-slate-700 flex items-center justify-between px-6 text-xs shrink-0">
         <div className="flex gap-4">
           <span className={isWaiting ? "text-amber-400" : "text-emerald-400"}>
@@ -162,7 +159,6 @@ function App() {
       
       <div className="flex-1 flex overflow-hidden">
         <div className="w-2/3 h-full relative">
-          {/* Overlay blocking clicks when waiting */}
           {isWaiting && (
             <div className="absolute inset-0 z-50 bg-slate-900/50 flex items-center justify-center pointer-events-none">
               <div className="bg-slate-800 px-6 py-3 rounded-full border border-slate-700 text-slate-300 font-medium">

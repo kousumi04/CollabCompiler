@@ -5,7 +5,10 @@ export type WsMessageType =
   | 'LANGUAGE_UPDATE'
   | 'ROOM_STATE'
   | 'REQUEST_CONTROL'
-  | 'CURSOR_UPDATE';
+  | 'CURSOR_UPDATE'
+  | 'RUN_CODE'
+  | 'RUN_STARTED'
+  | 'RUN_RESULT';
 
 export interface RoomStatePayload {
   owner: string;
