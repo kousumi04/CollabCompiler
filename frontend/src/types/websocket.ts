@@ -1,21 +1,26 @@
-import { SupportedLanguage } from './compiler';
+import type { SupportedLanguage } from './compiler';
 
 export type WsMessageType = 
   | 'CODE_UPDATE'
   | 'LANGUAGE_UPDATE'
-  | 'USER_JOINED'
-  | 'USER_LEFT';
+  | 'ROOM_STATE'
+  | 'REQUEST_CONTROL'
+  | 'CURSOR_UPDATE';
+
+export interface RoomStatePayload {
+  owner: string;
+  controller: string;
+  status: 'WAITING' | 'ACTIVE';
+  users: string[];
+}
+
+export interface CursorUpdatePayload {
+  line: number;
+  column: number;
+}
 
 export interface WsMessage {
   type: WsMessageType;
   client_id?: string;
   payload?: any;
-}
-
-export interface CodeUpdatePayload {
-  code: string;
-}
-
-export interface LanguageUpdatePayload {
-  language: SupportedLanguage;
 }

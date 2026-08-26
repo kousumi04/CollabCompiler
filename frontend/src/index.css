@@ -10,3 +10,16 @@ body,
   background-color: #0f172a; /* Slate 900 */
   color: #f8fafc; /* Slate 50 */
 }
+
+/* Monaco Editor Remote Cursor Styles */
+.remote-cursor-leader {
+  border-left: 2px solid #fbbf24 !important; /* Amber/Gold for Leader */
+  position: absolute;
+  z-index: 9;
+}
+
+.remote-cursor-member {
+  border-left: 2px solid #34d399 !important; /* Emerald for Member */
+  position: absolute;
+  z-index: 9;
+}
