@@ -7,17 +7,16 @@ router = APIRouter(tags=["WebSocket"])
 async def websocket_endpoint(websocket: WebSocket, room_id: str, client_id: str):
     await manager.connect(websocket, room_id)
     try:
-        # Notify others in the room that someone joined
         await manager.broadcast(
             {"type": "USER_JOINED", "client_id": client_id},
-            room_id
+            room_id,
+            exclude=websocket
         )
         
-        # Keep the connection open and listen for messages
         while True:
             data = await websocket.receive_json()
-            # For now, just echo the message to everyone in the room
-            await manager.broadcast(data, room_id)
+            # Broadcast the incoming data to everyone else in the room
+            await manager.broadcast(data, room_id, exclude=websocket)
             
     except WebSocketDisconnect:
         manager.disconnect(websocket, room_id)

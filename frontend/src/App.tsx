@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
 import { Header } from './components/Header';
 import { OutputConsole } from './components/OutputConsole';
-import { RoomEntry } from './components/roomEntry';
+import { RoomEntry } from './components/RoomEntry';
 import { runCodeApi } from './services/api';
 import { SUPPORTED_LANGUAGES } from './types/compiler';
 import { useRoomStore } from './store/roomStore';
+import { useWebSocket } from './hooks/useWebSocket';
 import type { SupportedLanguage, ExecuteResponse } from './types/compiler';
 
 function App() {
@@ -16,12 +17,49 @@ function App() {
   const [output, setOutput] = useState<ExecuteResponse | null>(null);
   const [isRunning, setIsRunning] = useState(false);
 
-  useEffect(() => {
-    const langOption = SUPPORTED_LANGUAGES.find(l => l.id === language);
+  // Callbacks for when we RECEIVE updates from the WebSocket
+  const handleRemoteCodeUpdate = useCallback((newCode: string) => {
+    setCode(newCode);
+  }, []);
+
+  const handleRemoteLanguageUpdate = useCallback((newLanguage: SupportedLanguage) => {
+    setLanguage(newLanguage);
+    const langOption = SUPPORTED_LANGUAGES.find(l => l.id === newLanguage);
+    if (langOption) {
+      // Small UX improvement: only overwrite code on language change if it's the default snippet
+      setCode(prev => {
+        const isCurrentDefault = SUPPORTED_LANGUAGES.some(l => l.defaultCode === prev);
+        return isCurrentDefault ? langOption.defaultCode : prev;
+      });
+    }
+  }, []);
+
+  // Initialize WebSocket hook
+  const { sendCodeUpdate, sendLanguageUpdate } = useWebSocket({
+    roomId,
+    username,
+    onCodeUpdate: handleRemoteCodeUpdate,
+    onLanguageUpdate: handleRemoteLanguageUpdate
+  });
+
+  // When USER changes language via dropdown
+  const handleLocalLanguageChange = (newLanguage: SupportedLanguage) => {
+    setLanguage(newLanguage);
+    sendLanguageUpdate(newLanguage);
+    
+    const langOption = SUPPORTED_LANGUAGES.find(l => l.id === newLanguage);
     if (langOption) {
       setCode(langOption.defaultCode);
+      sendCodeUpdate(langOption.defaultCode);
     }
-  }, [language]);
+  };
+
+  // When USER types in Monaco
+  const handleLocalCodeChange = (value: string | undefined) => {
+    const newCode = value || '';
+    setCode(newCode);
+    sendCodeUpdate(newCode);
+  };
 
   const handleRunCode = async () => {
     setIsRunning(true);
@@ -41,18 +79,15 @@ function App() {
 
   const currentLangOption = SUPPORTED_LANGUAGES.find(l => l.id === language);
 
-  // If no room is joined, show the Entry screen
   if (!roomId) {
     return <RoomEntry />;
   }
 
-  // If room is joined, show the Editor
   return (
     <div className="h-screen w-screen flex flex-col bg-slate-900 overflow-hidden">
-      {/* We will update the Header later to show the Room ID */}
       <Header 
         isRunning={isRunning} 
-        onLanguageChange={setLanguage} 
+        onLanguageChange={handleLocalLanguageChange} 
         onRunCode={handleRunCode} 
         selectedLanguage={language}
       />
@@ -64,7 +99,7 @@ function App() {
             language={currentLangOption?.monacoLanguage || 'python'} 
             theme="vs-dark" 
             value={code} 
-            onChange={(value) => setCode(value || '')}
+            onChange={handleLocalCodeChange}
             options={{
               minimap: { enabled: false },
               fontSize: 14,
