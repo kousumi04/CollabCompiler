@@ -8,7 +8,20 @@ router = APIRouter(tags=["WebSocket"])
 @router.websocket("/ws/{room_id}/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str, client_id: str):
     await manager.connect(websocket, room_id, client_id)
+    
     try:
+        # 1. SEND INITIAL SYNC STATE IF IT EXISTS
+        room = manager.rooms[room_id]
+        if room.get("code") is not None and room.get("language") is not None:
+            await websocket.send_json({
+                "type": "SYNC_STATE",
+                "payload": {
+                    "code": room["code"],
+                    "language": room["language"]
+                }
+            })
+
+        # 2. LISTEN FOR MESSAGES
         while True:
             data = await websocket.receive_json()
             msg_type = data.get("type")
@@ -27,17 +40,22 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, client_id: str)
                     exclude=client_id
                 )
                 
-            elif msg_type in ["CODE_UPDATE", "LANGUAGE_UPDATE"]:
+            elif msg_type == "CODE_UPDATE":
                 if manager.rooms[room_id]["controller"] == client_id:
+                    # Cache the latest code
+                    manager.rooms[room_id]["code"] = data["payload"]["code"]
+                    await manager.broadcast(data, room_id, exclude=client_id)
+                    
+            elif msg_type == "LANGUAGE_UPDATE":
+                if manager.rooms[room_id]["controller"] == client_id:
+                    # Cache the latest language
+                    manager.rooms[room_id]["language"] = data["payload"]["language"]
                     await manager.broadcast(data, room_id, exclude=client_id)
                     
             elif msg_type == "RUN_CODE":
-                # 1. Verify only the controller can run code
                 if manager.rooms[room_id]["controller"] == client_id:
-                    # 2. Tell everyone in the room that execution started
                     await manager.broadcast({"type": "RUN_STARTED"}, room_id)
                     
-                    # 3. Execute the code using our existing JDoodle service
                     payload = data.get("payload", {})
                     req = ExecuteCodeRequest(
                         language=payload.get("language"),
@@ -47,7 +65,6 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, client_id: str)
                     
                     result = await CodeExecutionService.run_code(req)
                     
-                    # 4. Broadcast the result to everyone
                     await manager.broadcast({
                         "type": "RUN_RESULT",
                         "payload": result.model_dump()

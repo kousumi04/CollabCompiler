@@ -12,6 +12,7 @@ interface UseWebSocketProps {
   onCursorUpdate: (clientId: string, cursor: CursorUpdatePayload) => void;
   onRunStarted: () => void;
   onRunResult: (result: ExecuteResponse) => void;
+  onSyncState: (code: string, language: SupportedLanguage) => void;
 }
 
 export const useWebSocket = ({ 
@@ -21,7 +22,8 @@ export const useWebSocket = ({
   onLanguageUpdate, 
   onCursorUpdate,
   onRunStarted,
-  onRunResult
+  onRunResult,
+  onSyncState
 }: UseWebSocketProps) => {
   const ws = useRef<WebSocket | null>(null);
   const [roomState, setRoomState] = useState<RoomStatePayload | null>(null);
@@ -55,6 +57,9 @@ export const useWebSocket = ({
           case 'RUN_RESULT':
             if (message.payload) onRunResult(message.payload);
             break;
+          case 'SYNC_STATE':
+            if (message.payload) onSyncState(message.payload.code, message.payload.language);
+            break;
         }
       } catch (error) {
         console.error('Failed to parse WS message:', error);
@@ -64,7 +69,7 @@ export const useWebSocket = ({
     return () => {
       if (ws.current) ws.current.close();
     };
-  }, [roomId, username, onCodeUpdate, onLanguageUpdate, onCursorUpdate, onRunStarted, onRunResult]);
+  }, [roomId, username, onCodeUpdate, onLanguageUpdate, onCursorUpdate, onRunStarted, onRunResult, onSyncState]);
 
   const sendCodeUpdate = useCallback((code: string) => {
     if (ws.current?.readyState === WebSocket.OPEN) {

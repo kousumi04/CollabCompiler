@@ -8,7 +8,8 @@ export type WsMessageType =
   | 'CURSOR_UPDATE'
   | 'RUN_CODE'
   | 'RUN_STARTED'
-  | 'RUN_RESULT';
+  | 'RUN_RESULT'
+  | 'SYNC_STATE'; // Added new type
 
 export interface RoomStatePayload {
   owner: string;

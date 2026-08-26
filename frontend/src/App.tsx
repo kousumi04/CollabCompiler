@@ -50,12 +50,18 @@ function App() {
 
   const handleRunStarted = useCallback(() => {
     setIsRunning(true);
-    setOutput(null); // Clear previous output
+    setOutput(null);
   }, []);
 
   const handleRunResult = useCallback((result: ExecuteResponse) => {
     setOutput(result);
     setIsRunning(false);
+  }, []);
+
+  // NEW: Handle synchronization on connect/reconnect
+  const handleSyncState = useCallback((syncCode: string, syncLanguage: SupportedLanguage) => {
+    setLanguage(syncLanguage);
+    setCode(syncCode);
   }, []);
 
   const { 
@@ -72,12 +78,21 @@ function App() {
     onLanguageUpdate: handleRemoteLanguageUpdate,
     onCursorUpdate: handleRemoteCursorUpdate,
     onRunStarted: handleRunStarted,
-    onRunResult: handleRunResult
+    onRunResult: handleRunResult,
+    onSyncState: handleSyncState
   });
 
   useEffect(() => {
     roomStateRef.current = roomState;
   }, [roomState]);
+
+  // Push initial code to cache if we are the room creator and it's active
+  useEffect(() => {
+    if (roomState && roomState.owner === username && roomState.status === 'WAITING') {
+      sendLanguageUpdate(language);
+      sendCodeUpdate(code);
+    }
+  }, [roomState?.status]); // Only run when status initializes
 
   const isWaiting = roomState?.status === 'WAITING';
   const hasControl = roomState?.controller === username;
@@ -120,7 +135,6 @@ function App() {
 
   const handleRunCode = () => {
     if (readOnly) return;
-    // We no longer call the REST API here. We send a WS command instead!
     sendRunCode(language, code);
   };
 
