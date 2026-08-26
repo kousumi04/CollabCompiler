@@ -2,11 +2,15 @@ import { useState, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import { Header } from './components/Header';
 import { OutputConsole } from './components/OutputConsole';
+import { RoomEntry } from './components/roomEntry';
 import { runCodeApi } from './services/api';
 import { SUPPORTED_LANGUAGES } from './types/compiler';
+import { useRoomStore } from './store/roomStore';
 import type { SupportedLanguage, ExecuteResponse } from './types/compiler';
 
 function App() {
+  const { roomId, username } = useRoomStore();
+  
   const [language, setLanguage] = useState<SupportedLanguage>('python');
   const [code, setCode] = useState<string>(SUPPORTED_LANGUAGES[0].defaultCode);
   const [output, setOutput] = useState<ExecuteResponse | null>(null);
@@ -37,8 +41,15 @@ function App() {
 
   const currentLangOption = SUPPORTED_LANGUAGES.find(l => l.id === language);
 
+  // If no room is joined, show the Entry screen
+  if (!roomId) {
+    return <RoomEntry />;
+  }
+
+  // If room is joined, show the Editor
   return (
     <div className="h-screen w-screen flex flex-col bg-slate-900 overflow-hidden">
+      {/* We will update the Header later to show the Room ID */}
       <Header 
         isRunning={isRunning} 
         onLanguageChange={setLanguage} 
