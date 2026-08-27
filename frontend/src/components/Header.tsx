@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, Loader2, Code2, Copy, Check, LogOut, Wifi } from 'lucide-react';
+import { Play, Loader2, Code2, Copy, Check, LogOut } from 'lucide-react';
 import { SUPPORTED_LANGUAGES } from '../types/compiler';
 import type { SupportedLanguage } from '../types/compiler';
 import { useRoomStore } from '../store/roomStore';

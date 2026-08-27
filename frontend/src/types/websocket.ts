@@ -1,4 +1,3 @@
-import type { SupportedLanguage } from './compiler';
 
 export type WsMessageType = 
   | 'CODE_UPDATE'
