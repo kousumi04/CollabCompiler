@@ -15,6 +15,7 @@ interface UseWebSocketProps {
   onRunStarted: () => void;
   onRunResult: (result: ExecuteResponse) => void;
   onSyncState: (code: string, language: SupportedLanguage) => void;
+  onError: (errorMessage: string) => void; // <-- Add this
 }
 
 export const useWebSocket = ({ 
@@ -25,7 +26,8 @@ export const useWebSocket = ({
   onCursorUpdate,
   onRunStarted,
   onRunResult,
-  onSyncState
+  onSyncState,
+  onError
 }: UseWebSocketProps) => {
   const ws = useRef<WebSocket | null>(null);
   const [roomState, setRoomState] = useState<RoomStatePayload | null>(null);
@@ -76,6 +78,9 @@ export const useWebSocket = ({
           case 'SYNC_STATE':
             if (message.payload) onSyncState(message.payload.code, message.payload.language);
             break;
+          case 'ERROR': 
+            if (message.payload) onError(message.payload);
+            break;  
         }
       } catch (error) {
         console.error('Failed to parse WS message:', error);

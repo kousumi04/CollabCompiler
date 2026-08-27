@@ -1,3 +1,4 @@
+import time
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.websocket.manager import manager
 from app.services.executor import CodeExecutionService
@@ -5,12 +6,15 @@ from app.schemas.execution import ExecuteCodeRequest
 
 router = APIRouter(tags=["WebSocket"])
 
+# Security Constants
+RATE_LIMIT_SECONDS = 5
+MAX_PAYLOAD_BYTES = 50000 # ~50KB limit
+
 @router.websocket("/ws/{room_id}/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str, client_id: str):
     await manager.connect(websocket, room_id, client_id)
     
     try:
-        # 1. SEND INITIAL SYNC STATE IF IT EXISTS
         room = manager.rooms[room_id]
         if room.get("code") is not None and room.get("language") is not None:
             await websocket.send_json({
@@ -21,7 +25,6 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, client_id: str)
                 }
             })
 
-        # 2. LISTEN FOR MESSAGES
         while True:
             data = await websocket.receive_json()
             msg_type = data.get("type")
@@ -42,24 +45,50 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, client_id: str)
                 
             elif msg_type == "CODE_UPDATE":
                 if manager.rooms[room_id]["controller"] == client_id:
-                    # Cache the latest code
-                    manager.rooms[room_id]["code"] = data["payload"]["code"]
+                    # Enforce payload limit on typing as well
+                    code = data.get("payload", {}).get("code", "")
+                    if len(code.encode('utf-8')) > MAX_PAYLOAD_BYTES:
+                        continue # Silently drop oversized typing payloads
+                    manager.rooms[room_id]["code"] = code
                     await manager.broadcast(data, room_id, exclude=client_id)
                     
             elif msg_type == "LANGUAGE_UPDATE":
                 if manager.rooms[room_id]["controller"] == client_id:
-                    # Cache the latest language
                     manager.rooms[room_id]["language"] = data["payload"]["language"]
                     await manager.broadcast(data, room_id, exclude=client_id)
                     
             elif msg_type == "RUN_CODE":
                 if manager.rooms[room_id]["controller"] == client_id:
+                    # --- SECURITY CHECKS ---
+                    current_time = time.time()
+                    last_run = room.get("last_run_time", 0)
+                    
+                    # Check 1: Rate Limiting
+                    if current_time - last_run < RATE_LIMIT_SECONDS:
+                        await websocket.send_json({
+                            "type": "ERROR",
+                            "payload": f"Rate limit active. Please wait {RATE_LIMIT_SECONDS - int(current_time - last_run)} seconds."
+                        })
+                        continue
+                        
+                    payload = data.get("payload", {})
+                    code = payload.get("code", "")
+                    
+                    # Check 2: Payload Size
+                    if len(code.encode('utf-8')) > MAX_PAYLOAD_BYTES:
+                        await websocket.send_json({
+                            "type": "ERROR",
+                            "payload": "Security Error: Code exceeds the 50KB size limit."
+                        })
+                        continue
+                        
+                    # Passed checks, proceed with execution
+                    manager.rooms[room_id]["last_run_time"] = current_time
                     await manager.broadcast({"type": "RUN_STARTED"}, room_id)
                     
-                    payload = data.get("payload", {})
                     req = ExecuteCodeRequest(
                         language=payload.get("language"),
-                        code=payload.get("code"),
+                        code=code,
                         stdin=payload.get("stdin", "")
                     )
                     

@@ -64,6 +64,16 @@ function App() {
     setCode(syncCode);
   }, []);
 
+  const handleError = useCallback((errorMessage: string) => {
+    setIsRunning(false);
+    setOutput({
+      stdout: '',
+      stderr: `[SERVER REJECTED REQUEST]\n${errorMessage}`,
+      exit_code: 1,
+      status: 'security_blocked'
+    });
+  }, []);
+
   const { 
     roomState, 
     status,
@@ -80,7 +90,8 @@ function App() {
     onCursorUpdate: handleRemoteCursorUpdate,
     onRunStarted: handleRunStarted,
     onRunResult: handleRunResult,
-    onSyncState: handleSyncState
+    onSyncState: handleSyncState,
+    onError: handleError
   });
 
   useEffect(() => {

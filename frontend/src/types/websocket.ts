@@ -9,7 +9,8 @@ export type WsMessageType =
   | 'RUN_CODE'
   | 'RUN_STARTED'
   | 'RUN_RESULT'
-  | 'SYNC_STATE'; // Added new type
+  | 'SYNC_STATE'
+  | 'ERROR'; 
 
 export interface RoomStatePayload {
   owner: string;
