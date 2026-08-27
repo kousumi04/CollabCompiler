@@ -66,6 +66,7 @@ function App() {
 
   const { 
     roomState, 
+    status,
     sendCodeUpdate, 
     sendLanguageUpdate, 
     sendCursorUpdate, 
@@ -149,6 +150,7 @@ function App() {
         onLanguageChange={handleLocalLanguageChange} 
         onRunCode={handleRunCode} 
         selectedLanguage={language}
+        connectionStatus={status} // <-- ADD THIS
       />
       
       <div className="h-8 bg-slate-800 border-b border-slate-700 flex items-center justify-between px-6 text-xs shrink-0">

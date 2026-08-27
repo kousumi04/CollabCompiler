@@ -4,6 +4,8 @@ import type { SupportedLanguage, ExecuteResponse } from '../types/compiler';
 
 const WS_BASE_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000';
 
+export type ConnectionStatus = 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED';
+
 interface UseWebSocketProps {
   roomId: string | null;
   username: string;
@@ -27,12 +29,26 @@ export const useWebSocket = ({
 }: UseWebSocketProps) => {
   const ws = useRef<WebSocket | null>(null);
   const [roomState, setRoomState] = useState<RoomStatePayload | null>(null);
+  const [status, setStatus] = useState<ConnectionStatus>('CONNECTING');
 
   useEffect(() => {
     if (!roomId || !username) return;
 
+    setStatus('CONNECTING');
     const wsUrl = `${WS_BASE_URL}/ws/${roomId}/${encodeURIComponent(username)}`;
     ws.current = new WebSocket(wsUrl);
+
+    ws.current.onopen = () => {
+      setStatus('CONNECTED');
+    };
+
+    ws.current.onclose = () => {
+      setStatus('DISCONNECTED');
+    };
+
+    ws.current.onerror = () => {
+      setStatus('DISCONNECTED');
+    };
 
     ws.current.onmessage = (event) => {
       try {
@@ -67,7 +83,9 @@ export const useWebSocket = ({
     };
 
     return () => {
-      if (ws.current) ws.current.close();
+      if (ws.current) {
+        ws.current.close();
+      }
     };
   }, [roomId, username, onCodeUpdate, onLanguageUpdate, onCursorUpdate, onRunStarted, onRunResult, onSyncState]);
 
@@ -103,6 +121,7 @@ export const useWebSocket = ({
 
   return {
     roomState,
+    status,
     sendCodeUpdate,
     sendLanguageUpdate,
     sendCursorUpdate,
